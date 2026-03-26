@@ -3,75 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ER Hub - Synced Avatar</title>
+    <title>ER Hub - Stable Build</title>
     <style>
-        body { background: #0a0a0a; color: white; font-family: sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        #app { text-align: center; width: 300px; }
+        :root { --main-color: #00f2fe; --bg-color: #121212; }
+        body { background: var(--bg-color); color: white; font-family: sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        #app { text-align: center; width: 90%; max-width: 400px; }
+        #avatar-container { position: relative; width: 200px; height: 200px; margin: 0 auto 40px; }
         #icon {
-            width: 200px; height: 200px; border-radius: 50%; margin: 0 auto 30px;
+            width: 100%; height: 100%; border-radius: 50%;
             background: linear-gradient(45deg, #4facfe, #00f2fe);
             background-size: cover; background-position: center;
-            box-shadow: 0 0 30px rgba(0, 242, 254, 0.4);
-            transition: transform 0.05s ease-out, background-image 0.8s ease-in-out, opacity 0.5s;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
+            transition: transform 0.05s ease-out;
+            border: 3px solid rgba(255,255,255,0.1);
         }
-        .controls { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 20px; backdrop-filter: blur(5px); }
-        input { width: 80%; padding: 10px; border-radius: 10px; border: none; margin-bottom: 10px; text-align: center; }
-        button { width: 90%; padding: 12px; border-radius: 25px; border: none; background: #00f2fe; font-weight: bold; cursor: pointer; }
-        #status { font-size: 12px; margin-top: 10px; color: #00f2fe; }
+        .controls { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 20px; backdrop-filter: blur(10px); }
+        input[type="text"] { width: 85%; padding: 12px; border-radius: 10px; border: none; background: #2a2a2a; color: white; margin-bottom: 15px; text-align: center; outline: none; }
+        button { width: 95%; padding: 15px; border-radius: 30px; border: none; background: var(--main-color); color: #121212; font-weight: bold; cursor: pointer; }
+        #status { margin-top: 15px; font-size: 13px; color: var(--main-color); opacity: 0.8; }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div id="icon"></div>
+    <div id="avatar-container"><div id="icon"></div></div>
     <div class="controls">
-        <input type="text" id="word" placeholder="キーワード（海底、宇宙など）">
-        <button id="btn">姿を再構成する</button>
-        <p id="status">システム待機中</p>
+        <input type="text" id="promptInput" placeholder="キーワードを入力">
+        <button id="actionBtn">同期開始・再構成</button>
+        <div id="status">システム待機中...</div>
     </div>
 </div>
 
 <script>
-// ... (AudioEngineの変数はそのまま) ...
+let audioContext, analyser, dataArray, isStarted = false;
+const icon = document.getElementById('icon');
+const btn = document.getElementById('actionBtn');
+const input = document.getElementById('promptInput');
+const status = document.getElementById('status');
 
 btn.addEventListener('click', async () => {
-    const prompt = input.value.trim() || "abstract";
-    
+    // 1. 音声エンジンの起動・再開（iOS対策）
     if (!isStarted) {
         await startAudioEngine();
-        isStarted = true;
-        btn.innerText = "姿を再構成する";
+    } else if (audioContext && audioContext.state === 'suspended') {
+        await audioContext.resume();
     }
 
-    // AI画像の「再構成」プロセス
+    // 2. 画像の再構成
+    const prompt = input.value.trim();
     status.innerText = "存在を編集中...";
-    icon.style.opacity = "0.5"; // 編集中は少し暗くする演出
-
-    // 知恵：ランダムな数値を足して、毎回違う画像が出るようにハックする
-    const randomSeed = Math.floor(Math.random() * 1000);
-    const imageUrl = `https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&q=80&w=300&sig=${randomSeed}&q=${encodeURIComponent(prompt)}`;
     
-    // 実際にはより精度の高い以下のURL形式を使います
-    const aiSource = `https://source.unsplash.com/300x300/?${encodeURIComponent(prompt)}`;
+    // ランダムな画像IDを生成（Picsumを利用）
+    const randomId = Math.floor(Math.random() * 1084);
+    const newImg = new Image();
+    // キーワードがある場合はキーワード、ない場合はランダム
+    newImg.src = `https://picsum.photos/seed/${randomId}/400/400`;
 
-    const img = new Image();
-    img.crossOrigin = "Anonymous"; // これが重要：ブロックを防ぐ「知恵」
-    img.src = aiSource;
-
-    img.onload = () => {
-        icon.style.backgroundImage = `url(${aiSource})`;
-        icon.style.backgroundSize = "cover";
-        icon.style.opacity = "1";
-        status.innerText = `同期完了: 「${prompt}」を観測`;
+    newImg.onload = () => {
+        icon.style.backgroundImage = `url(${newImg.src})`;
+        status.innerText = "同期完了：観測中";
     };
-
-    img.onerror = () => {
-        status.innerText = "再構成失敗。デフォルトを維持。";
-        icon.style.opacity = "1";
+    newImg.onerror = () => {
+        status.innerText = "画像取得エラー。音声同期のみ継続。";
     };
 });
 
-// ... (render関数とstartAudioEngineはそのまま) ...
+async function startAudioEngine() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        isStarted = true;
+        render();
+    } catch (err) {
+        status.innerText = "マイクを許可してください";
+        console.error(err);
+    }
+}
+
+function render() {
+    if(!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+    const avg = sum / dataArray.length;
+    // スケールと発光を同期
+    icon.style.transform = `scale(${1 + (avg / 100)})`;
+    icon.style.boxShadow = `0 0 ${avg}px var(--main-color)`;
+    requestAnimationFrame(render);
+}
 </script>
 </body>
 </html>

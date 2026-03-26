@@ -35,67 +35,41 @@
 </div>
 
 <script>
-let audioContext, analyser, dataArray, isStarted = false;
-const icon = document.getElementById('icon');
-const btn = document.getElementById('actionBtn');
-const input = document.getElementById('promptInput');
-const status = document.getElementById('status');
-
 btn.addEventListener('click', async () => {
-    // 1. 音声エンジンの起動・再開（iOS対策）
+    // 1. 音声エンジンの起動・再開
     if (!isStarted) {
         await startAudioEngine();
     } else if (audioContext && audioContext.state === 'suspended') {
         await audioContext.resume();
     }
 
-    // 2. 画像の再構成
-    const prompt = input.value.trim();
-    status.innerText = "存在を編集中...";
+    // 2. 言葉の意味を「姿」に変換する
+    const prompt = input.value.trim() || "abstract";
+    status.innerText = `${prompt} を再構成中...`;
+    icon.style.opacity = "0.5";
     
-    // ランダムな画像IDを生成（Picsumを利用）
-    const randomId = Math.floor(Math.random() * 1084);
+    // 知恵：キーワード検索に直結した画像URLを生成
+    // キャッシュ回避のためにタイムスタンプを付与
+    const timestamp = new Date().getTime();
+    const aiSource = `https://source.unsplash.com/featured/400x400?${encodeURIComponent(prompt)}&sig=${timestamp}`;
+
     const newImg = new Image();
-    // キーワードがある場合はキーワード、ない場合はランダム
-    newImg.src = `https://picsum.photos/seed/${randomId}/400/400`;
+    newImg.src = aiSource;
 
     newImg.onload = () => {
-        icon.style.backgroundImage = `url(${newImg.src})`;
-        status.innerText = "同期完了：観測中";
+        icon.style.backgroundImage = `url(${aiSource})`;
+        icon.style.backgroundSize = "cover";
+        icon.style.opacity = "1";
+        status.innerText = `同期完了：${prompt} として顕現`;
     };
+
     newImg.onerror = () => {
-        status.innerText = "画像取得エラー。音声同期のみ継続。";
+        // もし検索でエラーが出た場合は、安全なランダム画像へフォールバック
+        icon.style.backgroundImage = `url(https://picsum.photos/seed/${timestamp}/400/400)`;
+        icon.style.opacity = "1";
+        status.innerText = "汎用イメージで同期中";
     };
 });
-
-async function startAudioEngine() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 64;
-        source.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        isStarted = true;
-        render();
-    } catch (err) {
-        status.innerText = "マイクを許可してください";
-        console.error(err);
-    }
-}
-
-function render() {
-    if(!analyser) return;
-    analyser.getByteFrequencyData(dataArray);
-    let sum = 0;
-    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-    const avg = sum / dataArray.length;
-    // スケールと発光を同期
-    icon.style.transform = `scale(${1 + (avg / 100)})`;
-    icon.style.boxShadow = `0 0 ${avg}px var(--main-color)`;
-    requestAnimationFrame(render);
-}
 </script>
 </body>
 </html>

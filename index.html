@@ -3,131 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ER Hub Prototype - Edited Reality</title>
+    <title>ER Hub - Synced Avatar</title>
     <style>
-        :root { --main-color: #00f2fe; --bg-color: #121212; }
-        body { background: var(--bg-color); color: white; font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        #app { text-align: center; width: 90%; max-width: 400px; }
-        
-        /* 音声に同期して動くアイコン */
-        #avatar-container { position: relative; width: 180px; height: 180px; margin: 0 auto 40px; }
-        #avatar {
-            width: 100%; height: 100%;
-            border-radius: 50%;
+        body { background: #0a0a0a; color: white; font-family: sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        #app { text-align: center; width: 300px; }
+        #icon {
+            width: 200px; height: 200px; border-radius: 50%; margin: 0 auto 30px;
             background: linear-gradient(45deg, #4facfe, #00f2fe);
-            background-size: cover;
-            background-position: center;
-            box-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
-            transition: transform 0.05s ease-out, background-image 0.5s ease-in-out;
-            border: 3px solid rgba(255,255,255,0.1);
+            background-size: cover; background-position: center;
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.4);
+            transition: transform 0.05s ease-out, background-image 0.8s ease-in-out, opacity 0.5s;
         }
-
-        /* 入力エリア */
-        .controls { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 20px; backdrop-filter: blur(10px); }
-        input[type="text"] {
-            width: 80%; padding: 12px; border-radius: 10px; border: none; background: #2a2a2a; color: white; margin-bottom: 15px; outline: none; text-align: center;
-        }
-        button {
-            width: 90%; padding: 12px; border-radius: 25px; border: none; background: var(--main-color); color: #121212; font-weight: bold; cursor: pointer; transition: 0.3s;
-        }
-        button:active { transform: scale(0.95); }
-        #status { margin-top: 15px; font-size: 12px; color: var(--main-color); opacity: 0.8; letter-spacing: 1px; }
+        .controls { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 20px; backdrop-filter: blur(5px); }
+        input { width: 80%; padding: 10px; border-radius: 10px; border: none; margin-bottom: 10px; text-align: center; }
+        button { width: 90%; padding: 12px; border-radius: 25px; border: none; background: #00f2fe; font-weight: bold; cursor: pointer; }
+        #status { font-size: 12px; margin-top: 10px; color: #00f2fe; }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div id="avatar-container">
-        <div id="icon"></div> </div>
-
+    <div id="icon"></div>
     <div class="controls">
-        <input type="text" id="promptInput" placeholder="今の気分やキーワードを入力...">
-        <button id="actionBtn">同期開始・生成</button>
-        <div id="status">システム待機中...</div>
+        <input type="text" id="word" placeholder="キーワード（海底、宇宙など）">
+        <button id="btn">姿を再構成する</button>
+        <p id="status">システム待機中</p>
     </div>
 </div>
 
 <script>
-let audioContext, analyser, dataArray;
-let isStarted = false;
-
+let audioContext, analyser, dataArray, isStarted = false;
 const icon = document.getElementById('icon');
-const btn = document.getElementById('actionBtn');
-const input = document.getElementById('promptInput');
+const btn = document.getElementById('btn');
 const status = document.getElementById('status');
 
-// 初回起動と画像更新を兼ねる関数
 btn.addEventListener('click', async () => {
-    const prompt = input.value.trim();
+    const val = document.getElementById('word').value || "abstract";
     
-    // 1. 音声解析の開始（初回のみ）
     if (!isStarted) {
-        await startAudioEngine();
-        isStarted = true;
-        btn.innerText = "姿を再構成する";
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 64;
+            source.connect(analyser);
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            isStarted = true;
+            btn.innerText = "再構成を実行";
+            render();
+        } catch (e) { alert("マイクを許可してください"); return; }
     }
 
-    // 2. AI画像の「擬似」生成プロセス（知恵の演出）
-    if (prompt) {
-        status.innerText = "存在を編集中...";
-        // 本番ではここでWasm経由でAPIを叩く
-        // 今回はデモとして、入力ワードに基づいた画像をUnsplashから取得
-        const dummyImageUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(prompt)},abstract`;
-        
-        // 画像の読み込み完了を待ってから反映
-        const img = new Image();
-        img.src = dummyImageUrl;
-        img.onload = () => {
-            icon.style.backgroundImage = `url(${dummyImageUrl})`;
-            status.innerText = `同期完了: 「${prompt}」として顕現`;
-        };
-    }
+    // 画像切り替え（知恵：Unsplashの安定版URLを使用）
+    status.innerText = "次元編集中...";
+    icon.style.opacity = "0.3";
+    const imgUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(val)}`;
+    
+    const img = new Image();
+    img.src = imgUrl;
+    img.onload = () => {
+        icon.style.backgroundImage = `url(${imgUrl})`;
+        icon.style.opacity = "1";
+        status.innerText = `観測完了: ${val}`;
+    };
 });
-
-async function startAudioEngine() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioContext.state === 'suspended') await audioContext.resume();
-
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 64; // リアルタイム性を高めるため小さめに
-        source.connect(analyser);
-
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        render();
-    } catch (err) {
-        status.innerText = "エラー: マイクまたはシステム音を許可してください";
-    }
-}
 
 function render() {
     analyser.getByteFrequencyData(dataArray);
-    
     let sum = 0;
-    for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
-    }
-    const average = sum / dataArray.length;
-
-    // 音量に応じたスケールと発光の計算
-    const scale = 1 + (average / 100); 
-    const glow = average * 0.8;
-    
-    icon.style.transform = `scale(${scale})`;
-    icon.style.boxShadow = `0 0 ${glow}px var(--main-color)`;
-
+    for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+    const avg = sum / dataArray.length;
+    icon.style.transform = `scale(${1 + avg/80})`; // 少し敏感に
+    icon.style.boxShadow = `0 0 ${avg}px #00f2fe`;
     requestAnimationFrame(render);
 }
-
-// 初期アイコン画像（青い円のスタイル）
-icon.style.width = "100%";
-icon.style.height = "100%";
-icon.style.borderRadius = "50%";
-icon.style.background = "linear-gradient(45deg, #4facfe, #00f2fe)";
-icon.style.transition = "transform 0.05s ease-out, background-image 0.5s ease-in-out";
 </script>
-
 </body>
 </html>
